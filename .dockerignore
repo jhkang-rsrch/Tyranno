@@ -4,7 +4,7 @@ analysis/
 analysis2/
 analysis3/
 models/
-frontend/
+_frontend_archive/
 analyze*.py
 data/
 backend/data/

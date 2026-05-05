@@ -19,7 +19,8 @@ from .predictor import ProcDaysPredictor, add_business_days, get_predictor
 from .recommender import recommend as do_recommend
 
 BASE = Path(__file__).resolve().parent
-STATIC = BASE / "static"
+FRONTEND = BASE.parent / "frontend"     # /app/frontend in container
+STATIC = BASE / "static"                # legacy fallback (still works)
 
 app = FastAPI(title="KTL TestMate API", version="0.1")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"],
@@ -314,10 +315,11 @@ def dashboard(db: Session = Depends(get_session)):
 
 
 # ------------------------------------------------------------ static
-if STATIC.exists():
-    app.mount("/admin", StaticFiles(directory=str(STATIC / "admin"), html=True), name="admin")
-    app.mount("/applicant", StaticFiles(directory=str(STATIC / "applicant"), html=True), name="applicant")
-    app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
+FE = FRONTEND if FRONTEND.exists() else STATIC
+if FE.exists():
+    app.mount("/admin", StaticFiles(directory=str(FE / "admin"), html=True), name="admin")
+    app.mount("/applicant", StaticFiles(directory=str(FE / "applicant"), html=True), name="applicant")
+    app.mount("/static", StaticFiles(directory=str(FE)), name="static")
 
 
 @app.get("/")

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>관리자 통계 콘솔</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <style>
+    body { background:#f4f7f8; }
+    .topnav { padding: 12px 24px; background:#103e3a; color:#fff; display:flex; gap:16px; align-items:center; }
+    .topnav a { color:#fff; text-decoration:none; font-weight:600; opacity:.85; }
+    .topnav a.active { opacity:1; border-bottom:2px solid #ffd166; }
+    .stats-shell { padding:24px; max-width:1500px; margin:0 auto; }
+    .kpi-row { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:14px; margin-bottom:18px; }
+    .kpi { background:#fff; border-radius:10px; padding:14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+    .kpi p { margin:0; font-size:12px; color:#678; }
+    .kpi strong { display:block; font-size:26px; color:#103e3a; margin-top:4px; }
+    .kpi span { font-size:11px; color:#9aa; }
+    .stats-toolbar { display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+    .stats-toolbar select { padding:6px 10px; border:1px solid #cdd5d8; border-radius:6px; background:#fff; font-size:13px; }
+    .grid { display:grid; gap:16px; grid-template-columns: 1fr 1fr; }
+    .card { background:#fff; border-radius:10px; padding:14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+    .card h3 { margin:0 0 6px; font-size:14px; color:#103e3a; }
+    .card .sub { color:#789; font-size:11px; margin-bottom:8px; }
+    .card.full { grid-column: 1 / -1; }
+    .chart-wrap { position:relative; height: 280px; }
+    .heatmap { display:grid; grid-template-columns: 60px repeat(12, 1fr); gap:2px; font-size:10.5px; }
+    .heatmap .h-cell { padding:4px 2px; text-align:center; border-radius:3px; color:#103e3a; }
+    .heatmap .h-label { color:#678; padding:4px 0; text-align:right; padding-right:6px; }
+    table.mini { width:100%; border-collapse:collapse; font-size:12.5px; }
+    table.mini th, table.mini td { padding:4px 8px; border-bottom:1px solid #eef1f3; text-align:left; }
+    table.mini thead th { background:#f4f7f8; }
+    table.mini td.num { text-align:right; font-variant-numeric: tabular-nums; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <nav class="topnav">
+    <strong>KTL TestMate</strong>
+    <a href="/admin/">관리자</a>
+    <a href="/admin/db.html">DB 콘솔</a>
+    <a href="/admin/stats.html" class="active">통계 콘솔</a>
+    <a href="/applicant/">신청자</a>
+    <span style="margin-left:auto; font-size:12px; opacity:.8;">통계 · 학습 데이터 1,166,203건 + 운영 DB</span>
+  </nav>
+
+  <main class="stats-shell">
+    <section class="kpi-row">
+      <div class="kpi"><p>운영 DB · 총 신청</p><strong id="kpiTotal">-</strong><span>SQLite applications</span></div>
+      <div class="kpi"><p>오늘 접수</p><strong id="kpiToday">-</strong><span>실시간</span></div>
+      <div class="kpi"><p>이번달 접수</p><strong id="kpiMonth">-</strong><span>월 누적</span></div>
+      <div class="kpi"><p>대기중</p><strong id="kpiPending">-</strong><span>pending</span></div>
+      <div class="kpi"><p>완료</p><strong id="kpiCompleted">-</strong><span>completed</span></div>
+    </section>
+
+    <div class="stats-toolbar">
+      <label>사업구분
+        <select id="bizFilter"><option value="">전체</option></select>
+      </label>
+      <label>중분류
+        <select id="midFilter"><option value="">전체</option></select>
+      </label>
+      <span style="font-size:12px; color:#789;">선택하면 아래 차트가 필터링됩니다.</span>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>① 사업구분별 평균 처리일수</h3>
+        <div class="sub">학습 데이터 (2006–2023) 집계 · 평균 처리일수가 큰 순서대로</div>
+        <div class="chart-wrap"><canvas id="bizChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h3>② 중분류 평균 처리일수 (상위 15)</h3>
+        <div class="sub">선택한 사업구분 내 · 평균 큰 순</div>
+        <div class="chart-wrap"><canvas id="midChart"></canvas></div>
+      </div>
+
+      <div class="card full">
+        <h3>③ 월별 접수량 추세</h3>
+        <div class="sub">전체 학습 데이터 · 월별 raw 접수 건수</div>
+        <div class="chart-wrap"><canvas id="monthlyChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h3>④ 연도별 접수량</h3>
+        <div class="sub">학습 데이터 연간 추이</div>
+        <div class="chart-wrap"><canvas id="yearlyChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h3>⑤ 월별 평균 혼잡도 (계절성)</h3>
+        <div class="sub">전체 평균 = 1.0 기준의 상대값</div>
+        <div class="chart-wrap"><canvas id="seasonalityChart"></canvas></div>
+      </div>
+
+      <div class="card full">
+        <h3>⑥ 소분류 처리일수 분포 (선택된 중분류 내)</h3>
+        <div class="sub">평균 / 중앙값 / 표준편차 / 표본수</div>
+        <div style="max-height:340px; overflow:auto;">
+          <table class="mini" id="subTable">
+            <thead><tr><th>소분류</th><th class="num">평균(일)</th><th class="num">중앙값</th><th class="num">σ</th><th class="num">표본 N</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card full">
+        <h3>⑦ 운영 DB · 상태별·사업구분별 분포</h3>
+        <div class="sub">현재 운영 중인 신청서 (SQLite) — 사업구분 × 상태 stacked bar</div>
+        <div class="chart-wrap"><canvas id="opsChart"></canvas></div>
+      </div>
+
+      <div class="card full">
+        <h3>⑧ 운영 DB · AI 예측 vs 실제 처리일수</h3>
+        <div class="sub">완료된 신청에 한해 산점도 (점선 = 완벽 예측)</div>
+        <div class="chart-wrap"><canvas id="scatterChart"></canvas></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="./stats.js"></script>
+</body>
+</html>

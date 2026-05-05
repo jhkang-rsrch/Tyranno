@@ -219,8 +219,16 @@ LightGBM 단일 점추정 외에:
 .
 ├── Dockerfile, docker-compose.yml, entrypoint.sh
 ├── requirements.txt
+├── frontend/                # Vanilla JS SPAs (정적 파일, 빌드 불필요)
+│   ├── index.html
+│   ├── admin/               # 관리자 + DB 콘솔 + 통계 콘솔
+│   │   ├── index.html, script.js, styles.css
+│   │   ├── db.html, db.js
+│   │   └── stats.html, stats.js
+│   └── applicant/           # 신청자 SPA
+│       ├── index.html, script.js, styles.css
 ├── backend/
-│   ├── app.py              # FastAPI 라우팅
+│   ├── app.py              # FastAPI 라우팅 (frontend/ 정적 마운트)
 │   ├── db.py               # SQLite + SQLAlchemy
 │   ├── predictor.py        # LightGBM + SHAP
 │   ├── recommender.py      # 점수 기반 접수일 추천
@@ -228,11 +236,7 @@ LightGBM 단일 점추정 외에:
 │   ├── stats.py            # 통계 집계
 │   ├── train.py            # LightGBM 학습 스크립트
 │   ├── seed.py             # DB 데모 데이터 시드
-│   ├── artifacts/          # 학습된 모델 + 매핑 + 통계 csv (커밋됨)
-│   └── static/
-│       ├── index.html
-│       ├── admin/          # 관리자 SPA (vanilla JS)
-│       └── applicant/      # 신청자 SPA (vanilla JS)
+│   └── artifacts/          # 학습된 모델 + 매핑 + 통계 csv (커밋됨)
 └── data/                   # (gitignored) 학습용 CSV 위치
 ```
 

@@ -1,9 +1,9 @@
-# sibling projects (analysis/, models/, frontend/, etc.) — not part of TestMate
+# sibling projects (analysis/, models/, etc.) — not part of TestMate
 analysis/
 analysis2/
 analysis3/
 models/
-frontend/
+_frontend_archive/
 analyze.py
 analyze_v2.py
 analyze_v3.py
