@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>관리자 DB 콘솔</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <style>
+    body { background:#f4f7f8; }
+    .topnav { padding: 12px 24px; background:#103e3a; color:#fff; display:flex; gap:16px; align-items:center; }
+    .topnav a { color:#fff; text-decoration:none; font-weight:600; opacity:.85; }
+    .topnav a.active { opacity:1; border-bottom:2px solid #ffd166; }
+    .db-shell { padding:24px; max-width:1500px; margin:0 auto; }
+    .db-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+    .db-toolbar input, .db-toolbar select { padding:6px 10px; border:1px solid #cdd5d8; border-radius:6px; background:#fff; font-size:13px; }
+    .db-toolbar .btn { padding:7px 14px; border-radius:6px; border:0; cursor:pointer; font-size:13px; font-weight:600; }
+    .btn-primary { background:#103e3a; color:#fff; }
+    .btn-success { background:#2e7d32; color:#fff; }
+    .btn-danger  { background:#c62828; color:#fff; }
+    .btn-ghost   { background:#fff; border:1px solid #cdd5d8; }
+    .db-summary { color:#456; font-size:13px; margin-left:auto; }
+    .db-table-wrap { background:#fff; border-radius:10px; overflow:auto; box-shadow:0 1px 4px rgba(0,0,0,.06); max-height: calc(100vh - 220px); }
+    table.db-table { border-collapse:collapse; width:100%; font-size:12.5px; }
+    table.db-table th, table.db-table td { padding:6px 8px; border-bottom:1px solid #eef1f3; text-align:left; vertical-align:top; white-space:nowrap; }
+    table.db-table thead th { position:sticky; top:0; background:#103e3a; color:#fff; z-index:1; font-weight:600; }
+    table.db-table tbody tr:hover { background:#f9fbfc; }
+    table.db-table td.editable { cursor:cell; min-width:80px; }
+    table.db-table td.editable:hover { background:#fff8d8; }
+    table.db-table td.editing { padding:0; }
+    table.db-table td.editing input, table.db-table td.editing select {
+      width:100%; box-sizing:border-box; padding:6px 8px; border:2px solid #2e7d32;
+      font-size:12.5px; outline:none; background:#fffce8;
+    }
+    .row-actions { display:flex; gap:4px; }
+    .row-actions button { padding:3px 8px; font-size:11px; border-radius:4px; border:0; cursor:pointer; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+    .pill-pending { background:#fff3cd; color:#856404; }
+    .pill-completed { background:#d4edda; color:#155724; }
+    .raw-mode { font-family: ui-monospace, Menlo, monospace; font-size:11.5px; }
+  </style>
+</head>
+<body>
+  <nav class="topnav">
+    <strong>KTL TestMate</strong>
+    <a href="/admin/">관리자</a>
+    <a href="/admin/db.html" class="active">DB 콘솔</a>
+    <a href="/applicant/">신청자</a>
+    <span style="margin-left:auto; font-size:12px; opacity:.8;">SQLite · applications + samples</span>
+  </nav>
+
+  <main class="db-shell">
+    <div class="db-toolbar">
+      <select id="filterStatus">
+        <option value="">전체 상태</option>
+        <option value="pending">pending</option>
+        <option value="completed">completed</option>
+      </select>
+      <input id="filterText" type="search" placeholder="검색 (회사/신청인/분류/시료/메모…)" style="min-width:280px;" />
+      <button id="reloadBtn" class="btn btn-ghost" type="button">새로고침</button>
+      <button id="rawToggle" class="btn btn-ghost" type="button">전체 컬럼 보기</button>
+      <button id="exportBtn" class="btn btn-ghost" type="button">CSV 내보내기</button>
+      <span id="dbSummary" class="db-summary"></span>
+    </div>
+
+    <p style="font-size:12px; color:#678; margin:4px 0 12px;">
+      💡 셀을 클릭하면 그 자리에서 편집할 수 있습니다 (Enter 저장 / Esc 취소).
+      행 끝의 🗑 버튼으로 영구 삭제됩니다.
+    </p>
+
+    <div class="db-table-wrap">
+      <table class="db-table" id="dbTable">
+        <thead id="dbHead"></thead>
+        <tbody id="dbBody"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="./db.js"></script>
+</body>
+</html>
