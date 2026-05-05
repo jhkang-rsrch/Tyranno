@@ -1,0 +1,28 @@
+# sibling projects (analysis/, models/, frontend/, etc.) — not part of TestMate
+analysis/
+analysis2/
+analysis3/
+models/
+frontend/
+analyze.py
+analyze_v2.py
+analyze_v3.py
+
+# raw dataset (120MB) — supply via volume mount or download
+data/
+
+# runtime sqlite DB
+backend/data/
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.env
+
+# editor
+.vscode/
+.idea/
+*.swp
+.DS_Store

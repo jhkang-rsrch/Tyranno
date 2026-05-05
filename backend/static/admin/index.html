@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>관리자 화면 - 시험 접수 현황</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <style>
+      .topnav { padding: 12px 24px; background: #103e3a; color: #fff; display:flex; gap:16px; align-items:center; }
+      .topnav a { color:#fff; text-decoration:none; font-weight:600; opacity:.85; }
+      .topnav a.active { opacity:1; border-bottom:2px solid #ffd166; }
+      .shap-box { margin-top:12px; padding:10px; background:#f4f7f8; border-radius:8px; font-size:13px; }
+      .shap-bar { display:flex; align-items:center; gap:6px; margin:4px 0; }
+      .shap-bar .bar { height:8px; border-radius:4px; }
+      .shap-bar .pos { background:#cf563e; }
+      .shap-bar .neg { background:#3067a6; }
+      .shap-bar .label { flex: 0 0 200px; font-size:12px; color:#234; }
+      .shap-bar .val { flex: 0 0 60px; text-align:right; font-size:12px; color:#234; }
+    </style>
+  </head>
+  <body>
+    <nav class="topnav">
+      <strong>KTL TestMate</strong>
+      <a href="/admin/" class="active">관리자</a>
+      <a href="/applicant/">신청자</a>
+      <span style="margin-left:auto; font-size:12px; opacity:.8;">FastAPI · LightGBM · SHAP</span>
+    </nav>
+    <div class="admin-shell">
+      <main class="admin-app">
+        <header class="admin-header">
+          <div>
+            <p class="eyebrow">관리자 대시보드</p>
+            <h1>시험 접수 현황</h1>
+          </div>
+          <time id="currentTime" class="current-time"></time>
+        </header>
+
+        <section class="metric-layout" aria-label="접수 건수 요약">
+          <article class="metric-card">
+            <p>오늘 접수 건수</p>
+            <strong id="todayCount">0</strong>
+            <span>실시간 업데이트</span>
+          </article>
+          <article class="metric-card">
+            <p>이번달 접수 건수</p>
+            <strong id="monthCount">0</strong>
+            <span>월 누적 접수</span>
+          </article>
+          <article class="donut-card">
+            <div id="donutChart" class="donut-chart" aria-label="이번달 대비 오늘 접수 비율"></div>
+            <div>
+              <p>이번달 대비 오늘</p>
+              <strong id="donutPercent">0%</strong>
+            </div>
+          </article>
+        </section>
+
+        <section class="work-panel">
+          <div class="panel-toolbar">
+            <div class="view-tabs" role="tablist" aria-label="시험 상태">
+              <button id="pendingTab" class="tab-button active" type="button">미완료된 시험</button>
+              <button id="completedTab" class="tab-button" type="button">완료된 시험</button>
+            </div>
+            <span id="listSummary" class="list-summary"></span>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>중분류</th>
+                  <th>소분류</th>
+                  <th>시료 이름</th>
+                  <th id="statusColumn">처리</th>
+                </tr>
+              </thead>
+              <tbody id="testTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+
+      <aside class="predict-sidebar" aria-labelledby="predictTitle">
+        <div>
+          <p class="eyebrow">예측 시스템 (LightGBM)</p>
+          <h2 id="predictTitle">접수일 기준 예상 완료일</h2>
+        </div>
+
+        <div class="predict-calendar">
+          <div class="calendar-controls">
+            <button id="prevMonthButton" class="calendar-nav-button" type="button" aria-label="이전 달">‹</button>
+            <strong id="calendarMonthLabel"></strong>
+            <button id="nextMonthButton" class="calendar-nav-button" type="button" aria-label="다음 달">›</button>
+          </div>
+          <div class="weekday-row" aria-hidden="true">
+            <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+          </div>
+          <div id="calendarGrid" class="calendar-grid"></div>
+        </div>
+
+        <div class="predict-form">
+          <label>사업구분
+            <select id="bizSelect"></select>
+          </label>
+          <label>중분류
+            <select id="predictCategorySelect"></select>
+          </label>
+          <label>소분류
+            <select id="predictSubcategorySelect"></select>
+          </label>
+        </div>
+
+        <div class="predict-result">
+          <p>예측 완료일</p>
+          <strong id="predictedCompletion">날짜를 선택하세요</strong>
+          <span id="predictionSummary">캘린더 날짜와 분류를 선택하면 LightGBM 예측 결과가 표시됩니다.</span>
+        </div>
+        <div id="shapBox" class="shap-box" hidden>
+          <strong style="display:block; margin-bottom:6px;">SHAP — 예측 기여도 (Top 5)</strong>
+          <div id="shapList"></div>
+        </div>
+      </aside>
+    </div>
+
+    <div id="detailModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-panel">
+        <div class="modal-head">
+          <div>
+            <p id="modalStatus" class="eyebrow"></p>
+            <h2 id="modalTitle">신청 양식</h2>
+          </div>
+          <button id="closeModalButton" class="icon-button" type="button" aria-label="닫기">×</button>
+        </div>
+        <div id="modalContent" class="modal-content"></div>
+      </div>
+    </div>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

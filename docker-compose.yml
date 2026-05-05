@@ -1,0 +1,17 @@
+services:
+  testmate:
+    build: .
+    image: ktl-testmate:latest
+    container_name: ktl-testmate
+    ports:
+      - "8765:8765"
+    volumes:
+      # mount your CSV here. file inside should be: 통합_시험접수_현황.csv
+      - ./data:/app/data
+      # persist trained model + sqlite DB across restarts
+      - ./backend/artifacts:/app/backend/artifacts
+      - testmate-db:/app/backend/data
+    restart: unless-stopped
+
+volumes:
+  testmate-db:

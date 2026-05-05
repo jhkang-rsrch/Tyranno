@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>KTL TestMate</title>
+    <style>
+      body { margin:0; font-family: system-ui, -apple-system, "Noto Sans KR", sans-serif; background:#0f1d2a; color:#fff; min-height:100vh; display:flex; align-items:center; justify-content:center; }
+      .wrap { max-width: 720px; padding: 32px; text-align: center; }
+      h1 { font-size: 36px; margin: 0 0 12px; }
+      p { opacity:.85; line-height:1.6; }
+      .links { display:flex; gap:16px; justify-content:center; margin-top:32px; }
+      a.card { display:block; padding:24px 32px; background:#16324a; border-radius:14px; color:#fff; text-decoration:none; min-width:220px; transition: background .15s; }
+      a.card:hover { background:#1f4669; }
+      a.card strong { display:block; font-size:18px; margin-bottom:6px; }
+      a.card span { font-size:13px; opacity:.8; }
+      .meta { margin-top:32px; font-size:12px; opacity:.6; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>KTL TestMate</h1>
+      <p>한국산업기술시험원 시험 신청 데이터 기반<br/>AI 처리기간 예측·추천·상담 서비스</p>
+      <div class="links">
+        <a class="card" href="/applicant/"><strong>신청자 화면</strong><span>접수 · 예측 · AI 상담</span></a>
+        <a class="card" href="/admin/"><strong>관리자 화면</strong><span>접수 현황 · 통계 · SHAP</span></a>
+      </div>
+      <div class="meta">FastAPI · LightGBM · SHAP · SQLite</div>
+    </div>
+  </body>
+</html>

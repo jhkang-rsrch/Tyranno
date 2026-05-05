@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>한국산업기술시험원 시험 접수</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <style>
+      .topnav { padding: 12px 24px; background: #103e3a; color: #fff; display:flex; gap:16px; align-items:center; }
+      .topnav a { color:#fff; text-decoration:none; font-weight:600; opacity:.85; }
+      .topnav a.active { opacity:1; border-bottom:2px solid #ffd166; }
+      .chat-panel { margin-top:18px; background:#fff; border:1px solid #d9e1e3; border-radius:12px; padding:14px; }
+      .chat-log { max-height: 280px; overflow:auto; font-size:13px; padding:6px 0; }
+      .chat-msg { margin:6px 0; }
+      .chat-msg.user { text-align:right; }
+      .chat-msg .bubble { display:inline-block; padding:8px 12px; border-radius:12px; max-width:92%; white-space:pre-wrap; }
+      .chat-msg.user .bubble { background:#3067a6; color:#fff; }
+      .chat-msg.bot .bubble { background:#eef3f4; color:#234; }
+      .chat-input { display:flex; gap:8px; margin-top:8px; }
+      .chat-input input { flex:1; padding:8px 10px; border:1px solid #d9e1e3; border-radius:8px; }
+      .recommend-card { padding:8px 10px; background:#f6fafa; border:1px solid #d9e1e3; border-radius:8px; margin-bottom:6px; font-size:13px; }
+      .recommend-card strong { display:block; color:#126b67; }
+    </style>
+  </head>
+  <body>
+    <nav class="topnav">
+      <strong>KTL TestMate</strong>
+      <a href="/admin/">관리자</a>
+      <a href="/applicant/" class="active">신청자</a>
+      <span style="margin-left:auto; font-size:12px; opacity:.8;">FastAPI · LightGBM · SHAP</span>
+    </nav>
+    <main class="app-shell">
+      <aside class="recommend-sidebar" aria-labelledby="recommendTitle">
+        <div class="recommend-head">
+          <p class="eyebrow">AI 추천</p>
+          <h2 id="recommendTitle">시험신청 추천일자</h2>
+        </div>
+        <div class="predict-form" style="display:grid; gap:8px;">
+          <label>사업구분<select id="recBiz"></select></label>
+          <label>중분류<select id="recMid"></select></label>
+          <label>소분류<select id="recSub"></select></label>
+          <label>희망 시작일<input id="recEarliest" type="date" /></label>
+          <label>목표 완료일(선택)<input id="recDeadline" type="date" /></label>
+          <label>우선순위
+            <select id="recPriority">
+              <option value="fast">빠른 완료</option>
+              <option value="stable">일정 안정성</option>
+              <option value="avoid_congestion">혼잡 회피</option>
+              <option value="meet_deadline">마감 충족</option>
+            </select>
+          </label>
+          <button id="recButton" class="submit-button" type="button">추천받기</button>
+        </div>
+        <div id="recommendationList" class="recommendation-list" aria-label="추천일자 항목" style="margin-top:10px;"></div>
+        <p id="recommendationMessage" class="recommendation-message" role="status" aria-live="polite">입력 후 추천받기를 누르세요.</p>
+
+        <section class="chat-panel">
+          <p class="eyebrow">AI 상담형 추천</p>
+          <h3 style="margin:6px 0 8px;">자연어로 물어보세요</h3>
+          <div id="chatLog" class="chat-log"></div>
+          <div class="chat-input">
+            <input id="chatInput" type="text" placeholder="예) KOLAS교정 압력 시험을 5월 말까지 받고싶어요" />
+            <button id="chatSend" class="submit-button" type="button">전송</button>
+          </div>
+        </section>
+      </aside>
+
+      <div class="app">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">한국산업기술시험원</p>
+          <h1>시료 시험 접수 및 소요시간 안내</h1>
+        </div>
+        <time id="todayLabel" class="today"></time>
+      </header>
+
+      <section class="summary" aria-labelledby="summaryTitle">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">과거 데이터 기반</p>
+            <h2 id="summaryTitle">사업구분별 평균 처리일수</h2>
+          </div>
+          <span id="fastestLabel" class="status-pill"></span>
+        </div>
+        <div id="durationChart" class="duration-chart"></div>
+        <button id="toggleChartButton" class="chart-toggle" type="button" aria-expanded="false">펼치기</button>
+      </section>
+
+      <nav class="action-nav" aria-label="주요 기능">
+        <button id="receiptButton" class="primary-action active" type="button">시료접수</button>
+        <button id="calcButton" class="primary-action" type="button">시험시간 계산하기</button>
+      </nav>
+
+      <section id="receiptView" class="panel active" aria-labelledby="receiptTitle">
+        <form id="receiptForm" class="receipt-form">
+          <div class="section-head form-heading">
+            <div>
+              <p class="eyebrow">기술지원신청서</p>
+              <h2 id="receiptTitle">시료접수</h2>
+            </div>
+            <div class="form-heading-actions">
+              <span id="draftStatus" class="muted"></span>
+            </div>
+          </div>
+          <fieldset>
+            <legend>분류 선택</legend>
+            <div class="grid two">
+              <label>사업구분<select id="formBiz" name="biz"></select></label>
+              <label>중분류<select id="formMid" name="category"></select></label>
+              <label class="wide">소분류<select id="formSub" name="subcategory"></select></label>
+              <label>시료 이름<input name="sample_name" /></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>신청자 정보</legend>
+            <div class="grid two">
+              <label>회사명<input name="company" autocomplete="organization" /></label>
+              <label>사업자등록번호<input name="business_no" inputmode="numeric" /></label>
+              <label class="wide">회사주소<input name="address" autocomplete="street-address" /></label>
+              <label>대표자<input name="ceo" /></label>
+              <label>신청인<input name="applicant_name" autocomplete="name" /></label>
+              <label>전화번호<input name="phone" autocomplete="tel" /></label>
+              <label>휴대폰<input name="mobile" autocomplete="tel" /></label>
+              <label>E-mail<input name="email" type="email" /></label>
+              <label>FAX<input name="fax" /></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>접수 및 발급 정보</legend>
+            <div class="grid two">
+              <label>결제방법<input name="payment" placeholder="웹결제 / 방문결제" /></label>
+              <label>성적서 종류<input name="report" placeholder="국문 성적서, KOLAS" /></label>
+              <label>시료처리<input name="return_method" placeholder="택배회수 / 방문회수 / KTL폐기" /></label>
+              <label>회수 주소<input name="return_address" /></label>
+            </div>
+            <label class="full notes">특이사항<textarea name="notes" rows="3"></textarea></label>
+          </fieldset>
+
+          <div class="form-actions">
+            <button id="saveDraftButton" class="secondary-button" type="button">임시저장</button>
+            <button class="submit-button" type="submit">전송</button>
+          </div>
+          <p id="submitMessage" class="submit-message" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+
+      <section id="calcView" class="panel" aria-labelledby="calcTitle">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">예상 일정</p>
+            <h2 id="calcTitle">시험시간 계산하기</h2>
+          </div>
+        </div>
+        <form id="calculatorForm" class="calculator">
+          <label>사업구분<select id="calcBiz"></select></label>
+          <label>중분류<select id="categorySelect"></select></label>
+          <label>소분류<select id="subcategorySelect"></select></label>
+          <label>접수일<input id="calcDate" type="date" /></label>
+          <div class="calculator-actions">
+            <button id="calculateButton" class="submit-button" type="button">시간계산</button>
+          </div>
+        </form>
+        <div class="result-box">
+          <p>예상 소요시간</p>
+          <strong id="calculatedDays">-</strong>
+          <span id="calculatedDate"></span>
+        </div>
+      </section>
+      </div>
+
+      <aside class="calendar-sidebar" aria-labelledby="calendarTitle">
+        <div class="calendar-head">
+          <div>
+            <p class="eyebrow">완료일 확인</p>
+            <h2 id="calendarTitle">시험 완료 날짜</h2>
+          </div>
+          <div class="calendar-controls">
+            <button id="prevMonthButton" class="calendar-nav-button" type="button" aria-label="이전 달">‹</button>
+            <strong id="calendarMonthLabel"></strong>
+            <button id="nextMonthButton" class="calendar-nav-button" type="button" aria-label="다음 달">›</button>
+          </div>
+        </div>
+        <div class="calendar-widget">
+          <div class="weekday-row" aria-hidden="true">
+            <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+          </div>
+          <div id="calendarGrid" class="calendar-grid"></div>
+        </div>
+        <div class="calendar-form">
+          <label>사업구분<select id="calendarBizSelect"></select></label>
+          <label>중분류<select id="calendarCategorySelect"></select></label>
+          <label>소분류<select id="calendarSubcategorySelect"></select></label>
+        </div>
+        <div class="calendar-result">
+          <p>시험 완료 예정일</p>
+          <strong id="calendarCompletionDate">날짜를 선택하세요</strong>
+          <span id="calendarSelectionSummary">중분류, 소분류, 접수일을 선택하면 LightGBM 예측 완료일이 표시됩니다.</span>
+        </div>
+      </aside>
+    </main>
+    <script src="./script.js"></script>
+  </body>
+</html>

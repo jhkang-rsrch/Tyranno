@@ -1,0 +1,228 @@
+// Admin dashboard wired to FastAPI backend.
+const API = "";
+
+const $ = (s) => document.querySelector(s);
+const todayCountEl = $("#todayCount");
+const monthCountEl = $("#monthCount");
+const donutChart = $("#donutChart");
+const donutPercent = $("#donutPercent");
+const currentTime = $("#currentTime");
+const pendingTab = $("#pendingTab");
+const completedTab = $("#completedTab");
+const testTableBody = $("#testTableBody");
+const listSummary = $("#listSummary");
+const statusColumn = $("#statusColumn");
+const detailModal = $("#detailModal");
+const modalStatus = $("#modalStatus");
+const modalTitle = $("#modalTitle");
+const modalContent = $("#modalContent");
+const closeModalButton = $("#closeModalButton");
+const bizSelect = $("#bizSelect");
+const predictCategorySelect = $("#predictCategorySelect");
+const predictSubcategorySelect = $("#predictSubcategorySelect");
+const predictedCompletion = $("#predictedCompletion");
+const predictionSummary = $("#predictionSummary");
+const calendarGrid = $("#calendarGrid");
+const calendarMonthLabel = $("#calendarMonthLabel");
+const prevMonthButton = $("#prevMonthButton");
+const nextMonthButton = $("#nextMonthButton");
+const shapBox = $("#shapBox");
+const shapList = $("#shapList");
+
+let catalog = {}; // biz -> mid -> [subs]
+let currentView = "pending";
+let visibleCalendarDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let selectedCalendarDate = new Date();
+let cache = { applications: [] };
+
+async function api(path, init) {
+  const r = await fetch(API + path, init);
+  if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+const fmtDateTime = (v) => new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(v));
+const fmtDate = (v) => new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "long" }).format(new Date(v));
+const fmtDur = (s, e) => {
+  const ms = new Date(e) - new Date(s);
+  const h = Math.max(1, Math.round(ms / 3600000));
+  const d = Math.floor(h / 24); const r = h % 24;
+  if (d === 0) return `${r}시간`; if (r === 0) return `${d}일`; return `${d}일 ${r}시간`;
+};
+const isSameDate = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+const toISODate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+function fillSelect(el, values) {
+  el.innerHTML = values.map((v) => `<option value="${v}">${v}</option>`).join("");
+}
+
+function populatePredictSelects() {
+  const bizes = Object.keys(catalog).sort();
+  fillSelect(bizSelect, bizes);
+  onBizChange();
+}
+function onBizChange() {
+  const mids = Object.keys(catalog[bizSelect.value] || {}).sort();
+  fillSelect(predictCategorySelect, mids);
+  onMidChange();
+}
+function onMidChange() {
+  const subs = (catalog[bizSelect.value]?.[predictCategorySelect.value] || []).slice().sort();
+  fillSelect(predictSubcategorySelect, subs);
+  refreshPrediction();
+}
+
+function renderCalendar() {
+  const y = visibleCalendarDate.getFullYear(), m = visibleCalendarDate.getMonth();
+  const first = new Date(y, m, 1).getDay();
+  const last = new Date(y, m + 1, 0).getDate();
+  const today = new Date();
+  calendarMonthLabel.textContent = `${y}년 ${m + 1}월`;
+  const blanks = Array.from({ length: first }, () => '<button class="calendar-day empty" type="button" tabindex="-1"></button>');
+  const days = Array.from({ length: last }, (_, i) => {
+    const day = i + 1;
+    const dt = new Date(y, m, day);
+    const cls = ["calendar-day", isSameDate(dt, today) ? "today" : "", isSameDate(dt, selectedCalendarDate) ? "selected" : ""].filter(Boolean).join(" ");
+    return `<button class="${cls}" type="button" data-calendar-day="${day}">${day}</button>`;
+  });
+  calendarGrid.innerHTML = [...blanks, ...days].join("");
+}
+
+async function refreshPrediction() {
+  if (!selectedCalendarDate || !bizSelect.value) return;
+  const body = {
+    biz: bizSelect.value,
+    mid: predictCategorySelect.value,
+    sub: predictSubcategorySelect.value,
+    receive_on: toISODate(selectedCalendarDate),
+  };
+  try {
+    const [pred, exp] = await Promise.all([
+      api("/api/predict", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+      api("/api/explain", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+    ]);
+    predictedCompletion.textContent = fmtDate(pred.predicted_complete_at);
+    predictionSummary.textContent = `${fmtDate(selectedCalendarDate)} 접수 · ${body.biz} > ${body.mid} > ${body.sub} · 예상 ${pred.predicted_days}일 (${pred.low_days}~${pred.high_days}일, 신뢰도 ${Math.round(pred.confidence * 100)}%, 혼잡도 ${pred.congestion})`;
+    renderShap(exp);
+  } catch (e) {
+    predictionSummary.textContent = "예측 실패: " + e.message;
+  }
+}
+
+function renderShap(exp) {
+  const top = exp.top_features.slice(0, 5);
+  const max = Math.max(...top.map((t) => Math.abs(t.shap)));
+  shapList.innerHTML = top.map((t) => {
+    const w = Math.round((Math.abs(t.shap) / max) * 100);
+    const cls = t.shap >= 0 ? "pos" : "neg";
+    return `<div class="shap-bar"><span class="label">${t.feature}=${t.value}</span><div class="bar ${cls}" style="width:${w}%"></div><span class="val">${t.shap.toFixed(3)}</span></div>`;
+  }).join("");
+  shapBox.hidden = false;
+}
+
+function updateClock() {
+  currentTime.textContent = new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "long", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date());
+}
+
+async function refreshDashboard() {
+  try {
+    const d = await api("/api/dashboard");
+    todayCountEl.textContent = d.today;
+    monthCountEl.textContent = d.month;
+    const pct = d.month === 0 ? 0 : Math.round((d.today / d.month) * 100);
+    donutPercent.textContent = `${pct}%`;
+    donutChart.style.background = `conic-gradient(var(--accent) ${pct * 3.6}deg, #e4ecef 0deg)`;
+  } catch {}
+}
+
+async function refreshList() {
+  pendingTab.classList.toggle("active", currentView === "pending");
+  completedTab.classList.toggle("active", currentView === "completed");
+  statusColumn.textContent = currentView === "pending" ? "처리" : "완료 소요시간";
+  cache.applications = await api(`/api/applications?status=${currentView}`);
+  listSummary.textContent = `${cache.applications.length}건`;
+  if (cache.applications.length === 0) {
+    testTableBody.innerHTML = `<tr><td colspan="4">표시할 시험이 없습니다.</td></tr>`;
+    return;
+  }
+  testTableBody.innerHTML = cache.applications.map((a) => {
+    const right = currentView === "pending"
+      ? `<button class="complete-button" type="button" data-complete-id="${a.id}">완료시험으로 변경</button>`
+      : `<span class="duration-badge">${a.completed_at ? fmtDur(a.received_at, a.completed_at) : "-"}</span>`;
+    return `<tr data-test-id="${a.id}"><td>${a.category}</td><td>${a.subcategory}</td><td class="sample-cell">${a.sample_name || "-"}</td><td>${right}</td></tr>`;
+  }).join("");
+}
+
+function detailSection(title, items) {
+  return `<section class="detail-section"><h3>${title}</h3><div class="detail-grid">${items.map(([l,v])=>`<div class="detail-item"><span>${l}</span><strong>${v||"-"}</strong></div>`).join("")}</div></section>`;
+}
+
+function openDetail(a) {
+  modalStatus.textContent = a.status === "pending" ? "미완료된 시험" : "완료된 시험";
+  modalTitle.textContent = `${a.sample_name || "(시료명 없음)"} 신청 양식`;
+  modalContent.innerHTML = [
+    detailSection("시험 정보", [
+      ["사업구분", a.biz], ["중분류", a.category], ["소분류", a.subcategory],
+      ["시료 이름", a.sample_name],
+      ["접수 일시", fmtDateTime(a.received_at)],
+      ["완료 일시", a.completed_at ? fmtDateTime(a.completed_at) : "미완료"],
+      ["완료 소요시간", a.completed_at ? fmtDur(a.received_at, a.completed_at) : "진행중"],
+      ["AI 예측 소요일", a.predicted_days != null ? `${a.predicted_days}일` : "-"],
+      ["AI 예측 완료일", a.predicted_complete_at ? a.predicted_complete_at.slice(0,10) : "-"],
+    ]),
+    detailSection("신청자 정보", [
+      ["회사명", a.applicant?.company], ["사업자등록번호", a.applicant?.business_no],
+      ["회사주소", a.applicant?.address], ["대표자", a.applicant?.ceo],
+      ["신청인", a.applicant?.name], ["전화번호", a.applicant?.phone],
+      ["휴대폰", a.applicant?.mobile], ["E-mail", a.applicant?.email],
+      ["FAX", a.applicant?.fax],
+    ]),
+    detailSection("접수 및 발급 정보", [
+      ["결제방법", a.request?.payment], ["성적서 종류", a.request?.report],
+      ["시료처리", a.request?.return_method], ["택배 주소", a.request?.return_address],
+      ["특이사항", a.request?.notes],
+    ]),
+  ].join("");
+  detailModal.classList.remove("hidden");
+}
+
+async function completeApp(id) {
+  await api(`/api/applications/${id}/complete`, { method: "POST" });
+  await Promise.all([refreshList(), refreshDashboard()]);
+}
+
+function bind() {
+  pendingTab.addEventListener("click", () => { currentView = "pending"; refreshList(); });
+  completedTab.addEventListener("click", () => { currentView = "completed"; refreshList(); });
+  testTableBody.addEventListener("click", (e) => {
+    const cb = e.target.closest("[data-complete-id]");
+    if (cb) { e.stopPropagation(); completeApp(Number(cb.dataset.completeId)); return; }
+    const row = e.target.closest("[data-test-id]");
+    if (!row) return;
+    const a = cache.applications.find((x) => x.id === Number(row.dataset.testId));
+    if (a) openDetail(a);
+  });
+  closeModalButton.addEventListener("click", () => detailModal.classList.add("hidden"));
+  detailModal.addEventListener("click", (e) => { if (e.target === detailModal) detailModal.classList.add("hidden"); });
+  calendarGrid.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-calendar-day]"); if (!b) return;
+    selectedCalendarDate = new Date(visibleCalendarDate.getFullYear(), visibleCalendarDate.getMonth(), Number(b.dataset.calendarDay));
+    renderCalendar(); refreshPrediction();
+  });
+  prevMonthButton.addEventListener("click", () => { visibleCalendarDate = new Date(visibleCalendarDate.getFullYear(), visibleCalendarDate.getMonth() - 1, 1); renderCalendar(); });
+  nextMonthButton.addEventListener("click", () => { visibleCalendarDate = new Date(visibleCalendarDate.getFullYear(), visibleCalendarDate.getMonth() + 1, 1); renderCalendar(); });
+  bizSelect.addEventListener("input", onBizChange);
+  predictCategorySelect.addEventListener("input", onMidChange);
+  predictSubcategorySelect.addEventListener("input", refreshPrediction);
+}
+
+(async function init() {
+  updateClock();
+  catalog = await api("/api/catalog");
+  populatePredictSelects();
+  renderCalendar();
+  await Promise.all([refreshDashboard(), refreshList()]);
+  await refreshPrediction();
+  bind();
+  setInterval(() => { updateClock(); refreshDashboard(); }, 5000);
+})();

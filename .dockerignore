@@ -1,0 +1,14 @@
+.git
+.gitignore
+analysis/
+analysis2/
+analysis3/
+models/
+frontend/
+analyze*.py
+data/
+backend/data/
+backend/__pycache__/
+**/__pycache__
+**/*.pyc
+.venv/
