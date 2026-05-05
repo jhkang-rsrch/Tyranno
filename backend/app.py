@@ -345,6 +345,96 @@ def dashboard(db: Session = Depends(get_session)):
              "total": len(apps)}
 
 
+@app.get("/api/version")
+def version_info():
+    """Build/version metadata for footer display."""
+    info = {"version": app.version, "git": "unknown", "built_at": "unknown"}
+    vfile = BASE.parent / ".version"
+    if vfile.exists():
+        for line in vfile.read_text(encoding="utf-8").splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                info[k.strip()] = v.strip()
+    return info
+
+
+@app.get("/api/alerts")
+def alerts(db: Session = Depends(get_session)):
+    """관리자 대시보드용 통합 알림.
+    - overdue: 예측 완료일이 이미 지났는데 pending 상태
+    - due_soon: 예측 완료일이 오늘~3일 이내인 pending
+    - outliers: 완료된 신청 중 실제 소요일이 예측 대비 |z|>=2 (history_std 기준)
+    """
+    today = date.today()
+    apps = db.query(Application).all()
+    overdue, due_soon, outliers = [], [], []
+    for a in apps:
+        if a.status == "pending" and a.predicted_complete_at:
+            d = a.predicted_complete_at.date()
+            delta = (d - today).days
+            if delta < 0:
+                overdue.append({"id": a.id, "sample": a.sample_name,
+                                  "category": a.category,
+                                  "predicted_complete_at": d.isoformat(),
+                                  "days_overdue": -delta})
+            elif delta <= 3:
+                due_soon.append({"id": a.id, "sample": a.sample_name,
+                                   "category": a.category,
+                                   "predicted_complete_at": d.isoformat(),
+                                   "days_left": delta})
+        if (a.status == "completed" and a.received_at and a.completed_at
+                and a.predicted_days):
+            actual = (a.completed_at - a.received_at).total_seconds() / 86400.0
+            diff = actual - float(a.predicted_days)
+            # use sub-stats std as scale; fall back to 7d
+            try:
+                row = stats_mod._read("sub_stats.csv")
+                m = row[(row.get("사업구분명") == a.biz)
+                          & (row.get("단위사업중분류명") == a.category)
+                          & (row.get("단위사업소분류명") == a.subcategory)]
+                std = float(m["std"].iloc[0]) if len(m) else 7.0
+            except Exception:
+                std = 7.0
+            if std <= 0 or std != std:
+                std = 7.0
+            z = diff / std
+            if abs(z) >= 2.0:
+                outliers.append({"id": a.id, "sample": a.sample_name,
+                                   "category": a.category,
+                                   "predicted_days": float(a.predicted_days),
+                                   "actual_days": round(actual, 1),
+                                   "z": round(float(z), 2)})
+    overdue.sort(key=lambda x: -x["days_overdue"])
+    due_soon.sort(key=lambda x: x["days_left"])
+    outliers.sort(key=lambda x: -abs(x["z"]))
+    return {"overdue": overdue[:20], "due_soon": due_soon[:20],
+             "outliers": outliers[:20],
+             "counts": {"overdue": len(overdue), "due_soon": len(due_soon),
+                          "outliers": len(outliers)}}
+
+
+@app.get("/api/applications/{app_id}/explain")
+def explain_app(app_id: int,
+                  predictor: ProcDaysPredictor = Depends(get_predictor),
+                  db: Session = Depends(get_session)):
+    """SHAP top features + 비슷한 과거 사례 통계 (저장된 신청 기준)."""
+    a = db.get(Application, app_id)
+    if not a:
+        raise HTTPException(404, "not found")
+    if not (a.received_at and a.biz and a.category and a.subcategory):
+        raise HTTPException(400, "missing fields")
+    received = a.received_at.date() if a.received_at else date.today()
+    exp = predictor.explain(biz=a.biz, mid=a.category, sub=a.subcategory,
+                              received_on=received)
+    pred = predictor.predict(biz=a.biz, mid=a.category, sub=a.subcategory,
+                              received_on=received)
+    actual = None
+    if a.completed_at and a.received_at:
+        actual = round((a.completed_at - a.received_at).total_seconds() / 86400.0, 1)
+    return {"shap": exp, "prediction": pred, "actual_days": actual}
+
+
+
 # ------------------------------------------------------------ static
 FE = FRONTEND if FRONTEND.exists() else STATIC
 if FE.exists():

@@ -117,6 +117,18 @@
         <div class="chart-wrap"><canvas id="scatterChart"></canvas></div>
       </div>
 
+      <div class="card full" style="background:#fdecea; border-left:4px solid #e53935;">
+        <h3>🚨 ⑧-1 이상치 (예측 대비 실제 |z| ≥ 2)</h3>
+        <div class="sub">소분류 평균 표준편차 기준. 운영 데이터 누적 시 갱신.</div>
+        <div id="outlierSummary" style="font-size:12.5px; color:#7a1c14; margin-bottom:6px;"></div>
+        <div style="overflow-x:auto;">
+          <table id="outlierTable" style="width:100%; border-collapse:collapse; font-size:12.5px;">
+            <thead><tr style="background:#fff;"><th style="padding:6px;">#</th><th>분류</th><th>시료</th><th>예측(일)</th><th>실제(일)</th><th>오차</th><th>z-score</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card full" style="background:#fff8e1; border-left:4px solid #ffb300;">
         <h3>🔮 ⑨ 향후 6개월 접수량 예측 + 최근 12개월 추이</h3>
         <div class="sub">최근 12개월 평균(deseasoned) × 월별 계절성 인자 · 백테스트 MAE 표시 · 80% 신뢰 구간</div>
@@ -156,6 +168,10 @@
     </div>
   </main>
 
+  <footer id="appFooter" style="text-align:center; padding:14px 16px; font-size:11px; color:#789; border-top:1px solid #e1e6ea; margin-top:20px;">
+    KTL TestMate · <span id="versionLabel">v? · ?</span>
+  </footer>
+  <script src="./version.js"></script>
   <script src="./stats.js"></script>
 </body>
 </html>

@@ -155,6 +155,29 @@ async function refreshHotspots() {
   } catch {}
 }
 
+async function refreshAlerts() {
+  try {
+    const d = await api("/api/alerts");
+    const banner = document.getElementById("alertBanner");
+    const list = document.getElementById("alertList");
+    const counts = document.getElementById("alertCounts");
+    if (!banner || !list) return;
+    const total = d.counts.overdue + d.counts.due_soon + d.counts.outliers;
+    if (total === 0) { banner.hidden = true; return; }
+    banner.hidden = false;
+    counts.textContent = `(지연 ${d.counts.overdue} · 임박 ${d.counts.due_soon} · 이상치 ${d.counts.outliers})`;
+    const chip = (txt, bg) => `<span style="display:inline-block; margin:2px 4px; padding:2px 8px; background:${bg}; border-radius:10px;">${txt}</span>`;
+    const parts = [];
+    d.overdue.slice(0, 3).forEach(r => parts.push(chip(
+      `⏰ #${r.id} ${r.category||""}/${r.sample||""} <b>${r.days_overdue}일 지연</b>`, "#ffcdd2")));
+    d.due_soon.slice(0, 3).forEach(r => parts.push(chip(
+      `📅 #${r.id} ${r.category||""}/${r.sample||""} <b>D-${r.days_left}</b>`, "#ffe0b2")));
+    d.outliers.slice(0, 3).forEach(r => parts.push(chip(
+      `📊 #${r.id} 예측 ${r.predicted_days}일 vs 실제 ${r.actual_days}일 (z=${r.z})`, "#e1bee7")));
+    list.innerHTML = parts.join("") || "<span style='opacity:.7'>모두 정상</span>";
+  } catch {}
+}
+
 async function refreshList() {
   pendingTab.classList.toggle("active", currentView === "pending");
   completedTab.classList.toggle("active", currentView === "completed");
@@ -187,6 +210,52 @@ function openDetail(a) {
   modalTitle.textContent = `${a.sample_name || "(시료명 없음)"} 신청 양식 (#${a.id})`;
   renderViewMode();
   detailModal.classList.remove("hidden");
+  loadExplain(a.id);
+}
+
+async function loadExplain(id) {
+  const slot = document.getElementById("explainSlot");
+  if (!slot) return;
+  slot.innerHTML = '<span style="color:#789;">AI 분석 중…</span>';
+  try {
+    const d = await api(`/api/applications/${id}/explain`);
+    const p = d.prediction || {};
+    const top = (d.shap?.top_features || []).slice(0, 3);
+    const conf = p.confidence != null ? `${Math.round(p.confidence*100)}%` : "-";
+    const band = (p.low_days != null && p.high_days != null)
+      ? `${p.low_days}일 ~ ${p.high_days}일` : "-";
+    const cmp = (d.actual_days != null && p.predicted_days != null)
+      ? `<div class="detail-item" style="grid-column:1/-1; background:${Math.abs(d.actual_days - p.predicted_days) > 2*(p.history_std||7) ? "#fdecea" : "#eef6ee"};">
+           <span>예측 vs 실제</span>
+           <strong>예측 ${p.predicted_days}일 / 실제 ${d.actual_days}일 (오차 ${(d.actual_days - p.predicted_days).toFixed(1)}일)</strong>
+         </div>` : "";
+    const shapHtml = top.length === 0 ? "<span style='color:#789;'>SHAP 데이터 없음</span>" :
+      top.map(f => {
+        const sign = f.shap >= 0 ? "+" : "";
+        const color = f.shap >= 0 ? "#c62828" : "#2e7d32";
+        return `<div style="display:flex; gap:8px; padding:4px 0; border-bottom:1px dotted #ddd;">
+                  <span style="flex:0 0 130px; color:#345;">${f.feature}</span>
+                  <span style="flex:1; color:#566; font-size:12px;">${f.value}</span>
+                  <strong style="color:${color}; font-variant-numeric:tabular-nums;">${sign}${f.shap.toFixed(3)}</strong>
+                </div>`;
+      }).join("");
+    slot.innerHTML = `
+      <section class="detail-section"><h3>🧠 AI 예측 신뢰도 · 영향 요인</h3>
+        <div class="detail-grid">
+          <div class="detail-item"><span>예측 신뢰도</span><strong>${conf}</strong></div>
+          <div class="detail-item"><span>80% 신뢰 구간</span><strong>${band}</strong></div>
+          <div class="detail-item"><span>유사 사례</span><strong>${p.history_count?.toLocaleString() || 0}건 (평균 ${p.history_mean ?? "-"}일)</strong></div>
+          <div class="detail-item"><span>접수월 혼잡도</span><strong>${p.congestion ?? "-"}</strong></div>
+          ${cmp}
+        </div>
+        <div style="margin-top:10px; padding:10px; background:#f8fafb; border-radius:6px;">
+          <div style="font-size:12px; color:#456; margin-bottom:6px;">상위 영향 요인 (SHAP, +는 소요일 증가 방향)</div>
+          ${shapHtml}
+        </div>
+      </section>`;
+  } catch (e) {
+    slot.innerHTML = `<div style="color:#a55; font-size:12px;">분석 실패: ${e.message}</div>`;
+  }
 }
 
 function renderViewMode() {
@@ -213,6 +282,7 @@ function renderViewMode() {
       ["시료처리", a.request?.return_method], ["택배 주소", a.request?.return_address],
       ["특이사항", a.request?.notes],
     ]),
+    `<div id="explainSlot"></div>`,
   ].join("");
 }
 
@@ -382,6 +452,7 @@ function bind() {
   await Promise.all([refreshDashboard(), refreshList()]);
   await refreshPrediction();
   await refreshHotspots();
+  await refreshAlerts();
   bind();
   setInterval(() => { updateClock(); refreshDashboard(); }, 5000);
 })();

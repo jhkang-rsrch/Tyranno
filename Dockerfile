@@ -21,6 +21,10 @@ COPY frontend /app/frontend
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
+ARG GIT_SHA=unknown
+ARG BUILD_DATE=unknown
+RUN printf "git=%s\nbuilt_at=%s\n" "$GIT_SHA" "$BUILD_DATE" > /app/.version
+
 EXPOSE 8765
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

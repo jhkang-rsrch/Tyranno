@@ -216,6 +216,7 @@ async function refreshAll() {
     loadYearly(),
     loadSeasonality(),
     loadOpsCharts(),
+    loadOutliers(),
     loadForecast(),
     loadHotspots(),
     loadBizHeat(),
@@ -346,6 +347,25 @@ function bind() {
     Promise.all([loadMidChart(), loadSubTable()]);
   });
   $("#midFilter").addEventListener("input", () => loadSubTable());
+}
+
+async function loadOutliers() {
+  try {
+    const d = await api("/api/alerts");
+    const tbody = document.querySelector("#outlierTable tbody");
+    const sum = document.getElementById("outlierSummary");
+    if (!tbody) return;
+    const rows = d.outliers || [];
+    sum.textContent = `이상치 ${d.counts.outliers}건 / 지연 ${d.counts.overdue}건 / 임박 ${d.counts.due_soon}건`;
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="padding:12px; text-align:center; color:#789;">이상치 없음 (예측 정확도 양호)</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map(r => {
+      const diff = (r.actual_days - r.predicted_days).toFixed(1);
+      return `<tr style="border-top:1px solid #f4d4d0;"><td style="padding:5px 6px;">#${r.id}</td><td>${r.category||""}</td><td>${r.sample||""}</td><td style="text-align:right;">${r.predicted_days}</td><td style="text-align:right;">${r.actual_days}</td><td style="text-align:right; color:${diff>0?'#c62828':'#2e7d32'};">${diff>0?"+":""}${diff}</td><td style="text-align:right;"><b>${r.z}</b></td></tr>`;
+    }).join("");
+  } catch (e) { console.warn("outliers", e); }
 }
 
 (async function init() {

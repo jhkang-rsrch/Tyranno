@@ -31,7 +31,9 @@ open http://localhost:8765/
 |---|---|
 | http://localhost:8765/ | 랜딩 |
 | http://localhost:8765/applicant/ | 신청자 모드 (접수 + 자연어 상담 + 추천) |
-| http://localhost:8765/admin/ | 관리자 모드 (현황 + 통계 + SHAP 시각화) |
+| http://localhost:8765/admin/ | 관리자 메인 (현황 + 알림 배너 + 핫스팟 배너) |
+| http://localhost:8765/admin/db.html | DB 콘솔 (인라인 편집 · CSV/Excel 내보내기) |
+| http://localhost:8765/admin/stats.html | 통계 콘솔 (12개 차트 · 예측 · 이상치) |
 | http://localhost:8765/docs | Swagger UI (전체 REST API) |
 
 ### 모델을 직접 재학습하려면
@@ -61,7 +63,7 @@ python -m uvicorn backend.app:app --host 0.0.0.0 --port 8765
 ```
                 ┌────────────────────────────────────────────────┐
                 │                  Browser                       │
-                │   /applicant/  ←→  /admin/                     │
+                │   /applicant/  ←→  /admin/{,db,stats}          │
                 └──────────┬─────────────────────────┬──────────┘
                            │ REST (JSON)             │
             ┌──────────────▼──────────────┐  static  │
@@ -69,21 +71,24 @@ python -m uvicorn backend.app:app --host 0.0.0.0 --port 8765
             │  /api/predict /explain      │
             │  /api/recommend /chat       │
             │  /api/applications /stats   │
-            └──┬─────────┬──────────┬─────┘
-               │         │          │
-   ┌───────────▼─┐  ┌────▼─────┐  ┌─▼─────────┐
-   │ predictor   │  │ agent    │  │ stats     │
-   │ LightGBM +  │  │ Regex    │  │ pandas    │
-   │ SHAP        │  │ NL → cmd │  │           │
-   └───────────┬─┘  └────┬─────┘  └─┬─────────┘
-               │         │           │
-        ┌──────▼─────────▼───────────▼─────┐
+            │  /api/forecast/* /alerts    │
+            │  /api/version               │
+            └──┬───────┬──────┬──────┬────┘
+               │       │      │      │
+   ┌───────────▼─┐  ┌──▼───┐ ┌▼────┐ ┌▼────────┐
+   │ predictor   │  │agent │ │stats│ │forecast │
+   │ LightGBM +  │  │Regex │ │pandas│ │level ×  │
+   │ SHAP        │  │NL→cmd│ │     │ │seasonal │
+   └───────────┬─┘  └──┬───┘ └─┬───┘ └─┬───────┘
+               │       │       │       │
+        ┌──────▼───────▼───────▼───────▼────┐
         │  artifacts/  (committed)         │
         │   lgbm_proc_days.txt             │
         │   category_maps.json             │
         │   global_stats.json              │
         │   {biz,mid,sub}_stats.csv        │
-        │   {monthly,yearly,seasonality}.csv│
+        │   05~08 monthly/yearly/seasonal  │
+        │   09~12 biz×month / biz×ym / yoy │
         └──────────────────────────────────┘
                    │
               ┌────▼────────────┐
@@ -97,7 +102,7 @@ python -m uvicorn backend.app:app --host 0.0.0.0 --port 8765
 
 ## 🤖 예측 모델이 어떻게 동작하는가
 
-전체 파이프라인은 **5개의 협력 컴포넌트**로 구성됩니다. 각각 별도 모듈에 있고, 한 번의 사용자
+전체 파이프라인은 **6개의 협력 컴포넌트**로 구성됩니다. 각각 별도 모듈에 있고, 한 번의 사용자
 요청에 여러 개가 함께 호출됩니다.
 
 ### 1️⃣ 처리일수 회귀 모델 — LightGBM ([backend/predictor.py](backend/predictor.py))
@@ -201,15 +206,65 @@ LightGBM 단일 점추정 외에:
 |---|---|---|
 | GET  | `/api/catalog` | `사업구분 → 중분류 → [소분류]` 트리 |
 | POST | `/api/predict` | 점추정 + 80% 구간 + 신뢰도 + 혼잡도 |
-| POST | `/api/explain` | SHAP top-K |
+| POST | `/api/explain` | SHAP top-K (분류·접수일 기반) |
 | POST | `/api/recommend` | 우선순위별 접수일 N개 |
 | POST | `/api/chat` | 자연어 → 추출 + 예측 + 답변 |
 | GET  | `/api/stats/{biz,mid,sub}` | 분류별 평균/중앙값/표준편차 |
 | GET  | `/api/stats/{monthly,yearly,seasonality}` | 시계열 집계 |
-| GET/POST/DELETE | `/api/applications[/{id}[/complete]]` | 신청 CRUD |
+| GET  | `/api/forecast/overall?horizon=N` | 향후 N개월 접수량 예측 + 80% 신뢰밴드 + 백테스트 MAE |
+| GET  | `/api/forecast/hotspots?top_k=K` | 다음달 평년 대비 몰릴 (사업×중분류) Top-K 경보 |
+| GET  | `/api/forecast/biz-heat` | 사업구분 × 월 분포(%) 히트맵 |
+| GET  | `/api/forecast/biz-yoy` | 사업구분별 전년 대비 성장률 |
+| GET  | `/api/forecast/biz-series?biz=...` | 사업구분 월별 시계열 (드릴다운용) |
+| GET  | `/api/alerts` | 통합 알림: 지연(overdue) + 임박(due_soon) + 이상치(outliers) |
+| GET  | `/api/applications/{id}/explain` | 저장된 신청 1건의 SHAP + 예측 vs 실제 비교 |
+| GET/POST/DELETE/PATCH | `/api/applications[/{id}[/complete]]` | 신청 CRUD + 관리자 직접 편집 |
 | GET  | `/api/dashboard` | 오늘/이번달/대기/완료 카운터 |
+| GET  | `/api/version` | 빌드 메타데이터 (git sha + build date) |
 
 전체 스키마는 http://localhost:8765/docs (Swagger UI) 에서 확인.
+
+---
+
+## 🛡️ 관리자 운영 기능
+
+| 페이지 | 핵심 |
+|---|---|
+| **`/admin/`** 메인 | 오늘/이번달 KPI · 미완료/완료 시험 목록 · **🚨 즉시 확인 알림 배너** · **🔮 다음달 사전 대비 권고** · 신청 상세 모달 |
+| **`/admin/db.html`** DB 콘솔 | 셀 단위 인라인 편집 · 필터 · 행 삭제 · CSV/Excel(.xlsx) 내보내기 |
+| **`/admin/stats.html`** 통계 콘솔 | 12개 차트/표 (분류별 평균·시계열·계절성·예측·이상치·히트맵·YoY) |
+
+### 🔒 개인정보 마스킹 (기본 ON)
+- **이름** (신청인/대표자) — 가운데 글자 `*` (예: 홍길동 → 홍\*동 / 남궁민수 → 남\*\*수)
+- **휴대폰/전화/팩스** — 가운데 자리 `*` (예: 010-1234-5678 → 010-\*\*\*\*-5678)
+- **이메일** — 로컬파트 앞 2자만 (예: `abcd@x.com` → `ab**@x.com`)
+- 토글 상태는 `localStorage` 저장. **편집 모드 / Excel·CSV 내보내기**에도 동일 적용 → 외부 유출 방지.
+
+### 🚨 알림 시스템 (`/api/alerts`)
+| 카테고리 | 조건 |
+|---|---|
+| `overdue` | pending인데 AI 예측 완료일이 이미 지남 |
+| `due_soon` | pending이고 예측 완료일까지 0~3일 남음 |
+| `outliers` | completed 신청의 실제 소요일이 예측 대비 |z| ≥ 2 (소분류 표준편차 기준) |
+
+대시보드 상단에 **즉시 확인 배너**로 자동 노출, 통계 콘솔의 ⑧-1 카드에 이상치 표가 함께 표시됩니다.
+
+### 🔮 사전 대비 워크로드 예측 (`/api/forecast/*`)
+- **레벨 × 계절성 모델**: 최근 12개월 deseasoned 평균 × 월별 계절 인자
+- **80% 신뢰 밴드**: 잔차의 ±1.28σ
+- **백테스트 MAE**: 1-step ahead rolling, 최근 12개월 (≈ 월 평균의 10% 수준)
+- **Hotspot 점수**: `next_month_count / annual_avg × log(1+total)`, 다음달 비율 ≥1.20× 면 경보 플래그
+
+### 🧠 신청 상세에서 실시간 SHAP
+신청 모달에서 자동으로 `/api/applications/{id}/explain` 호출 → SHAP top-3 + 80% 구간 + 신뢰도 + (완료된 건이라면) 예측 vs 실제 오차를 한 화면에 노출.
+
+### 📦 데이터 내보내기
+- DB 콘솔: **CSV** (UTF-8 BOM) 또는 **Excel `.xlsx`** (SheetJS, 한글 컬럼명·자동 너비)
+- 두 형식 모두 마스킹 ON 상태를 그대로 반영.
+
+### 🪪 버전 추적
+모든 admin 페이지 하단에 `v{API} · {git short sha} · {build date}` 표시. Docker build 시
+`GIT_SHA` / `BUILD_DATE` build-arg로 주입 (`docker compose build` 시 자동 export).
 
 ---
 
@@ -224,7 +279,9 @@ LightGBM 단일 점추정 외에:
 │   ├── admin/               # 관리자 + DB 콘솔 + 통계 콘솔
 │   │   ├── index.html, script.js, styles.css
 │   │   ├── db.html, db.js
-│   │   └── stats.html, stats.js
+│   │   ├── stats.html, stats.js
+│   │   ├── mask.js          # 개인정보 마스킹 유틸
+│   │   └── version.js       # 푸터 빌드 표시
 │   └── applicant/           # 신청자 SPA
 │       ├── index.html, script.js, styles.css
 ├── backend/
@@ -234,6 +291,7 @@ LightGBM 단일 점추정 외에:
 │   ├── recommender.py      # 점수 기반 접수일 추천
 │   ├── agent.py            # 한국어 NL 에이전트 (regex)
 │   ├── stats.py            # 통계 집계
+│   ├── forecast.py         # 워크로드 예측 + Hotspot 경보
 │   ├── train.py            # LightGBM 학습 스크립트
 │   ├── seed.py             # DB 데모 데이터 시드
 │   └── artifacts/          # 학습된 모델 + 매핑 + 통계 csv (커밋됨)

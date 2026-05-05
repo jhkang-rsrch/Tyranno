@@ -263,6 +263,35 @@ function exportCSV() {
   URL.revokeObjectURL(url);
 }
 
+function exportXLSX() {
+  if (typeof XLSX === "undefined") { alert("Excel 라이브러리(xlsx)를 불러오지 못했습니다."); return; }
+  const filtered = applyFilter(rows);
+  const keys = cols.filter(c => c[2] !== "actions").map(c => c[0]);
+  const labels = cols.filter(c => c[2] !== "actions").map(c => c[1]);
+  const data = filtered.map(r => {
+    const o = {};
+    keys.forEach((k, i) => {
+      let v = r[k];
+      if (v == null) v = "";
+      if (k === "applicant_name" || k === "ceo") v = PiiMask.maskName(v);
+      else if (k === "phone" || k === "mobile" || k === "fax") v = PiiMask.maskPhone(v);
+      else if (k === "email") v = PiiMask.maskEmail(v);
+      o[labels[i]] = v;
+    });
+    return o;
+  });
+  const ws = XLSX.utils.json_to_sheet(data, { header: labels });
+  // 컬럼 너비 자동 추정
+  ws["!cols"] = labels.map((l, i) => {
+    const max = Math.max(l.length, ...data.map(d => String(d[l] ?? "").length));
+    return { wch: Math.min(40, Math.max(8, max + 2)) };
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "applications");
+  const stamp = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `applications_${stamp}.xlsx`);
+}
+
 function bind() {
   $("#dbBody").addEventListener("click", (e) => {
     const del = e.target.closest("[data-del]");
@@ -274,6 +303,7 @@ function bind() {
   $("#filterText").addEventListener("input", renderBody);
   $("#reloadBtn").addEventListener("click", reload);
   $("#exportBtn").addEventListener("click", exportCSV);
+  $("#exportXlsxBtn").addEventListener("click", exportXLSX);
   $("#rawToggle").addEventListener("click", () => {
     cols = cols === COLS_BASIC ? COLS_RAW : COLS_BASIC;
     document.querySelector("table.db-table").classList.toggle("raw-mode", cols === COLS_RAW);
