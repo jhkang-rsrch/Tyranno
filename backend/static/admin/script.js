@@ -17,6 +17,10 @@ const modalStatus = $("#modalStatus");
 const modalTitle = $("#modalTitle");
 const modalContent = $("#modalContent");
 const closeModalButton = $("#closeModalButton");
+const editButton = $("#editButton");
+const saveButton = $("#saveButton");
+const cancelEditButton = $("#cancelEditButton");
+const deleteButton = $("#deleteButton");
 const bizSelect = $("#bizSelect");
 const predictCategorySelect = $("#predictCategorySelect");
 const predictSubcategorySelect = $("#predictSubcategorySelect");
@@ -34,6 +38,8 @@ let currentView = "pending";
 let visibleCalendarDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let selectedCalendarDate = new Date();
 let cache = { applications: [] };
+let currentApp = null;     // application currently in modal
+let editing = false;
 
 async function api(path, init) {
   const r = await fetch(API + path, init);
@@ -158,8 +164,19 @@ function detailSection(title, items) {
 }
 
 function openDetail(a) {
+  currentApp = a;
+  editing = false;
+  saveButton.hidden = true;
+  cancelEditButton.hidden = true;
+  editButton.hidden = false;
   modalStatus.textContent = a.status === "pending" ? "미완료된 시험" : "완료된 시험";
-  modalTitle.textContent = `${a.sample_name || "(시료명 없음)"} 신청 양식`;
+  modalTitle.textContent = `${a.sample_name || "(시료명 없음)"} 신청 양식 (#${a.id})`;
+  renderViewMode();
+  detailModal.classList.remove("hidden");
+}
+
+function renderViewMode() {
+  const a = currentApp;
   modalContent.innerHTML = [
     detailSection("시험 정보", [
       ["사업구분", a.biz], ["중분류", a.category], ["소분류", a.subcategory],
@@ -183,7 +200,114 @@ function openDetail(a) {
       ["특이사항", a.request?.notes],
     ]),
   ].join("");
-  detailModal.classList.remove("hidden");
+}
+
+const _editFields = [
+  ["시험 정보", [
+    ["status", "상태", "select", ["pending","completed"]],
+    ["biz", "사업구분"],
+    ["category", "중분류"],
+    ["subcategory", "소분류"],
+    ["sample_name", "시료 이름"],
+    ["received_at", "접수 일시", "datetime-local"],
+    ["completed_at", "완료 일시", "datetime-local"],
+    ["predicted_days", "AI 예측 소요일", "number"],
+    ["predicted_complete_at", "AI 예측 완료일", "datetime-local"],
+  ]],
+  ["신청자 정보", [
+    ["company", "회사명"], ["business_no", "사업자등록번호"],
+    ["address", "회사주소", "textarea"], ["ceo", "대표자"],
+    ["applicant_name", "신청인"], ["phone", "전화번호"],
+    ["mobile", "휴대폰"], ["email", "E-mail"], ["fax", "FAX"],
+  ]],
+  ["접수 및 발급 정보", [
+    ["payment", "결제방법"], ["report", "성적서 종류"],
+    ["return_method", "시료처리"], ["return_address", "택배 주소", "textarea"],
+    ["notes", "특이사항", "textarea"],
+  ]],
+];
+
+function _flatVal(a, k) {
+  if (k in a) return a[k];
+  if (a.applicant && k in a.applicant) return a.applicant[k];
+  if (k === "name" && a.applicant) return a.applicant.name;
+  if (a.request && k in a.request) return a.request[k];
+  return null;
+}
+
+function _toLocalDT(v) {
+  if (!v) return "";
+  // input[type=datetime-local] expects YYYY-MM-DDTHH:MM
+  return v.slice(0,16);
+}
+
+function renderEditMode() {
+  const a = currentApp;
+  const html = _editFields.map(([title, fields]) => {
+    const rows = fields.map(([key, label, kind, options]) => {
+      let raw = _flatVal(a, key);
+      if (key === "applicant_name") raw = a.applicant?.name;
+      let val = raw == null ? "" : String(raw);
+      let input;
+      if (kind === "select") {
+        input = `<select name="${key}">${options.map(o => `<option value="${o}" ${o===val?"selected":""}>${o}</option>`).join("")}</select>`;
+      } else if (kind === "textarea") {
+        input = `<textarea name="${key}">${val}</textarea>`;
+      } else if (kind === "number") {
+        input = `<input type="number" name="${key}" value="${val}" />`;
+      } else if (kind === "datetime-local") {
+        input = `<input type="datetime-local" name="${key}" value="${_toLocalDT(val)}" />`;
+      } else {
+        input = `<input type="text" name="${key}" value="${val.replace(/"/g,"&quot;")}" />`;
+      }
+      return `<label>${label}</label>${input}`;
+    }).join("");
+    return `<section class="edit-section"><h3>${title}</h3><div class="edit-grid">${rows}</div></section>`;
+  }).join("");
+  modalContent.innerHTML = `<form id="editForm">${html}</form>`;
+}
+
+async function saveEdits() {
+  const form = document.getElementById("editForm");
+  if (!form) return;
+  const fd = new FormData(form);
+  const payload = {};
+  for (const [k, v] of fd.entries()) {
+    if (v === "" || v == null) continue;
+    if (k === "predicted_days") payload[k] = parseInt(v, 10);
+    else if (["received_at","completed_at","predicted_complete_at"].includes(k))
+      payload[k] = new Date(v).toISOString();
+    else payload[k] = v;
+  }
+  try {
+    const updated = await api(`/api/applications/${currentApp.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    currentApp = updated;
+    editing = false;
+    saveButton.hidden = true;
+    cancelEditButton.hidden = true;
+    editButton.hidden = false;
+    renderViewMode();
+    await Promise.all([refreshList(), refreshDashboard()]);
+  } catch (e) {
+    alert("저장 실패: " + e.message);
+  }
+}
+
+async function deleteCurrent() {
+  if (!currentApp) return;
+  if (!confirm(`#${currentApp.id} 신청을 정말 삭제하시겠습니까? (DB에서 영구 제거)`)) return;
+  try {
+    await api(`/api/applications/${currentApp.id}`, { method: "DELETE" });
+    detailModal.classList.add("hidden");
+    currentApp = null;
+    await Promise.all([refreshList(), refreshDashboard()]);
+  } catch (e) {
+    alert("삭제 실패: " + e.message);
+  }
 }
 
 async function completeApp(id) {
@@ -204,6 +328,23 @@ function bind() {
   });
   closeModalButton.addEventListener("click", () => detailModal.classList.add("hidden"));
   detailModal.addEventListener("click", (e) => { if (e.target === detailModal) detailModal.classList.add("hidden"); });
+  editButton.addEventListener("click", () => {
+    if (!currentApp) return;
+    editing = true;
+    editButton.hidden = true;
+    saveButton.hidden = false;
+    cancelEditButton.hidden = false;
+    renderEditMode();
+  });
+  cancelEditButton.addEventListener("click", () => {
+    editing = false;
+    editButton.hidden = false;
+    saveButton.hidden = true;
+    cancelEditButton.hidden = true;
+    renderViewMode();
+  });
+  saveButton.addEventListener("click", saveEdits);
+  deleteButton.addEventListener("click", deleteCurrent);
   calendarGrid.addEventListener("click", (e) => {
     const b = e.target.closest("[data-calendar-day]"); if (!b) return;
     selectedCalendarDate = new Date(visibleCalendarDate.getFullYear(), visibleCalendarDate.getMonth(), Number(b.dataset.calendarDay));

@@ -86,6 +86,34 @@ class ApplicationIn(BaseModel):
     samples: list[SampleIn] = Field(default_factory=list)
 
 
+class ApplicationPatch(BaseModel):
+    """Partial update — every field is optional. Admin DB editor uses this."""
+    status: Optional[str] = None
+    biz: Optional[str] = None
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    sample_name: Optional[str] = None
+    received_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    predicted_days: Optional[int] = None
+    predicted_complete_at: Optional[datetime] = None
+    company: Optional[str] = None
+    business_no: Optional[str] = None
+    address: Optional[str] = None
+    ceo: Optional[str] = None
+    applicant_name: Optional[str] = None
+    phone: Optional[str] = None
+    mobile: Optional[str] = None
+    email: Optional[str] = None
+    fax: Optional[str] = None
+    payment: Optional[str] = None
+    report: Optional[str] = None
+    return_method: Optional[str] = None
+    return_address: Optional[str] = None
+    notes: Optional[str] = None
+    samples: Optional[list[SampleIn]] = None
+
+
 # ------------------------------------------------------------ helpers
 def _to_dict(a: Application) -> dict:
     return {
@@ -248,6 +276,25 @@ def delete_app(app_id: int, db: Session = Depends(get_session)):
         raise HTTPException(404, "not found")
     db.delete(a); db.commit()
     return {"ok": True}
+
+
+@app.patch("/api/applications/{app_id}")
+def patch_app(app_id: int, payload: ApplicationPatch,
+               db: Session = Depends(get_session)):
+    """Admin DB editor — update any column directly."""
+    a = db.get(Application, app_id)
+    if not a:
+        raise HTTPException(404, "not found")
+    data = payload.model_dump(exclude_unset=True)
+    samples = data.pop("samples", None)
+    for k, v in data.items():
+        setattr(a, k, v)
+    if samples is not None:
+        a.samples.clear()
+        for s in samples:
+            a.samples.append(Sample(**s))
+    db.commit(); db.refresh(a)
+    return _to_dict(a)
 
 
 @app.get("/api/dashboard")
