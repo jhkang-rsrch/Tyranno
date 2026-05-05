@@ -95,6 +95,10 @@ function fmtCell(key, v) {
     return `<span class="pill ${cls}">${v}</span>`;
   }
   if (["received_at","completed_at","predicted_complete_at"].includes(key)) return fmtDT(v);
+  // 개인정보 마스킹
+  if (key === "applicant_name" || key === "ceo") v = PiiMask.maskName(v);
+  else if (key === "phone" || key === "mobile" || key === "fax") v = PiiMask.maskPhone(v);
+  else if (key === "email") v = PiiMask.maskEmail(v);
   if (typeof v === "string" && v.length > 40) return v.slice(0,40) + "…";
   return String(v);
 }
@@ -241,8 +245,12 @@ function exportCSV() {
   const keys = cols.filter(c => c[2] !== "actions").map(c => c[0]);
   const header = keys.join(",");
   const lines = filtered.map(r => keys.map(k => {
-    const v = r[k];
+    let v = r[k];
     if (v == null) return "";
+    // CSV에도 마스킹 적용 (보안)
+    if (k === "applicant_name" || k === "ceo") v = PiiMask.maskName(v);
+    else if (k === "phone" || k === "mobile" || k === "fax") v = PiiMask.maskPhone(v);
+    else if (k === "email") v = PiiMask.maskEmail(v);
     const s = String(v).replace(/"/g, '""');
     return /[",\n]/.test(s) ? `"${s}"` : s;
   }).join(","));
@@ -272,6 +280,7 @@ function bind() {
     $("#rawToggle").textContent = cols === COLS_RAW ? "기본 컬럼만" : "전체 컬럼 보기";
     renderHead(); renderBody();
   });
+  PiiMask.bindToggle($("#piiToggle"), renderBody);
 }
 
 (async function init() {

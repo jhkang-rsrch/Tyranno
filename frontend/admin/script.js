@@ -203,10 +203,10 @@ function renderViewMode() {
     ]),
     detailSection("신청자 정보", [
       ["회사명", a.applicant?.company], ["사업자등록번호", a.applicant?.business_no],
-      ["회사주소", a.applicant?.address], ["대표자", a.applicant?.ceo],
-      ["신청인", a.applicant?.name], ["전화번호", a.applicant?.phone],
-      ["휴대폰", a.applicant?.mobile], ["E-mail", a.applicant?.email],
-      ["FAX", a.applicant?.fax],
+      ["회사주소", a.applicant?.address], ["대표자", PiiMask.maskName(a.applicant?.ceo)],
+      ["신청인", PiiMask.maskName(a.applicant?.name)], ["전화번호", PiiMask.maskPhone(a.applicant?.phone)],
+      ["휴대폰", PiiMask.maskPhone(a.applicant?.mobile)], ["E-mail", PiiMask.maskEmail(a.applicant?.email)],
+      ["FAX", PiiMask.maskPhone(a.applicant?.fax)],
     ]),
     detailSection("접수 및 발급 정보", [
       ["결제방법", a.request?.payment], ["성적서 종류", a.request?.report],
@@ -342,6 +342,9 @@ function bind() {
   });
   closeModalButton.addEventListener("click", () => detailModal.classList.add("hidden"));
   detailModal.addEventListener("click", (e) => { if (e.target === detailModal) detailModal.classList.add("hidden"); });
+  PiiMask.bindToggle(document.getElementById("piiToggle"), () => {
+    if (currentApp && !editing) renderViewMode();
+  });
   editButton.addEventListener("click", () => {
     if (!currentApp) return;
     editing = true;

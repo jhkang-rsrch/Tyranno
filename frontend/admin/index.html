@@ -149,6 +149,9 @@
             <h2 id="modalTitle">신청 양식</h2>
           </div>
           <div style="display:flex; gap:8px; align-items:center;">
+            <label style="display:inline-flex; align-items:center; gap:4px; font-size:11.5px; color:#345; padding:4px 8px; background:#f4f6f8; border-radius:5px; cursor:pointer;" title="신청인 이름 가운데 글자, 휴대폰 가운데 자리 등 비식별화">
+              <input id="piiToggle" type="checkbox" /> 🔒 마스킹
+            </label>
             <button id="editButton" class="complete-button" type="button">편집</button>
             <button id="saveButton" class="complete-button" type="button" hidden style="background:#2e7d32;">저장</button>
             <button id="cancelEditButton" class="icon-button" type="button" hidden>취소</button>
@@ -160,6 +163,7 @@
       </div>
     </div>
 
+    <script src="./mask.js"></script>
     <script src="./script.js"></script>
   </body>
 </html>
