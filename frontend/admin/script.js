@@ -141,6 +141,20 @@ async function refreshDashboard() {
   } catch {}
 }
 
+async function refreshHotspots() {
+  try {
+    const d = await api("/api/forecast/hotspots?top_k=5");
+    const banner = document.getElementById("hotspotBanner");
+    const list = document.getElementById("hotspotList");
+    if (!banner || !list || !d.rows?.length) return;
+    const alerts = d.rows.filter(r => r.alert);
+    if (alerts.length === 0) { banner.hidden = true; return; }
+    banner.hidden = false;
+    list.innerHTML = `다음달(${d.next_month}월) 평년 대비 몰릴 것으로 예상되는 분야 <b>${alerts.length}건</b>: ` +
+      alerts.slice(0, 5).map(r => `<span style="display:inline-block; margin:2px 4px; padding:2px 8px; background:#ffe0b2; border-radius:10px;"><b>${r.mid}</b> (${r.next_ratio.toFixed(2)}×, ${r.next_count.toLocaleString()}건)</span>`).join("");
+  } catch {}
+}
+
 async function refreshList() {
   pendingTab.classList.toggle("active", currentView === "pending");
   completedTab.classList.toggle("active", currentView === "completed");
@@ -364,6 +378,7 @@ function bind() {
   renderCalendar();
   await Promise.all([refreshDashboard(), refreshList()]);
   await refreshPrediction();
+  await refreshHotspots();
   bind();
   setInterval(() => { updateClock(); refreshDashboard(); }, 5000);
 })();

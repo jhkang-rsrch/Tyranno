@@ -116,6 +116,43 @@
         <div class="sub">완료된 신청에 한해 산점도 (점선 = 완벽 예측)</div>
         <div class="chart-wrap"><canvas id="scatterChart"></canvas></div>
       </div>
+
+      <div class="card full" style="background:#fff8e1; border-left:4px solid #ffb300;">
+        <h3>🔮 ⑨ 향후 6개월 접수량 예측 + 최근 12개월 추이</h3>
+        <div class="sub">최근 12개월 평균(deseasoned) × 월별 계절성 인자 · 백테스트 MAE 표시 · 80% 신뢰 구간</div>
+        <div id="forecastSummary" style="font-size:12.5px; color:#234; margin-bottom:6px;"></div>
+        <div class="chart-wrap" style="height:320px;"><canvas id="forecastChart"></canvas></div>
+      </div>
+
+      <div class="card full" style="background:#ffeaea; border-left:4px solid #c62828;">
+        <h3>⚠️ ⑩ 다음달 몰릴 것으로 예상되는 분야 (사전 대비 권고)</h3>
+        <div class="sub">계절성 분석 — 해당 중분류의 연평균 대비 다음달 비율(next_ratio)이 1.0 이상이면 상대적 성수기</div>
+        <div style="max-height:340px; overflow:auto;">
+          <table class="mini" id="hotspotTable">
+            <thead><tr>
+              <th>#</th><th>사업구분</th><th>중분류</th>
+              <th class="num">이번달 비율</th>
+              <th class="num">다음달 비율</th>
+              <th class="num">다음달 예상</th>
+              <th class="num">연 누적</th>
+              <th>경보</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card full">
+        <h3>🌡️ ⑪ 사업구분 × 월별 분포 히트맵</h3>
+        <div class="sub">각 사업구분의 월별 접수 비중(%) — 진할수록 그 달에 집중됨</div>
+        <div id="heatBox" style="overflow:auto; padding:6px 0;"></div>
+      </div>
+
+      <div class="card full">
+        <h3>📈 ⑫ 사업구분별 전년 대비 성장률 (YoY)</h3>
+        <div class="sub">최근 2개 연도 비교 · 빨강=하락, 초록=상승</div>
+        <div class="chart-wrap" style="height:300px;"><canvas id="yoyChart"></canvas></div>
+      </div>
     </div>
   </main>
 

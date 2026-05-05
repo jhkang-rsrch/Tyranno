@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from . import stats as stats_mod
+from . import forecast as forecast_mod
 from .agent import answer as agent_answer
 from .db import Application, Sample, get_session, init_db
 from .predictor import ProcDaysPredictor, add_business_days, get_predictor
@@ -209,6 +210,36 @@ def stats_yearly():
 @app.get("/api/stats/seasonality")
 def stats_seasonality():
     return stats_mod.congestion_heat()
+
+
+# ------------------------------------------------------------ forecasting
+@app.get("/api/forecast/overall")
+def forecast_overall(horizon: int = 6):
+    """Project next N months using level × month-of-year seasonality."""
+    return forecast_mod.overall_forecast(horizon=horizon)
+
+
+@app.get("/api/forecast/hotspots")
+def forecast_hotspots(top_k: int = 12):
+    """Categories expected to surge next month (seasonal alert)."""
+    return forecast_mod.upcoming_hotspots(top_k=top_k)
+
+
+@app.get("/api/forecast/biz-heat")
+def forecast_biz_heat():
+    """Per-사업구분 month-of-year share heatmap."""
+    return forecast_mod.biz_seasonal_heat()
+
+
+@app.get("/api/forecast/biz-yoy")
+def forecast_biz_yoy():
+    """Year-over-year growth per 사업구분."""
+    return forecast_mod.biz_yoy_growth()
+
+
+@app.get("/api/forecast/biz-series")
+def forecast_biz_series(biz: str):
+    return forecast_mod.biz_monthly_series(biz)
 
 
 # ------------------------------------------------------------ applications CRUD

@@ -216,7 +216,128 @@ async function refreshAll() {
     loadYearly(),
     loadSeasonality(),
     loadOpsCharts(),
+    loadForecast(),
+    loadHotspots(),
+    loadBizHeat(),
+    loadYoY(),
   ]);
+}
+
+// ------------------------------------------------------------ forecast
+async function loadForecast() {
+  const d = await api("/api/forecast/overall?horizon=6");
+  if (!d.history?.length) return;
+  const histTail = d.history.slice(-12);
+  const labels = [...histTail.map(h => h.ym), ...d.forecast.map(f => f.ym)];
+  const histData = [...histTail.map(h => h.count), ...d.forecast.map(() => null)];
+  const fcData = [...histTail.map(() => null), ...d.forecast.map(f => f.predicted)];
+  const lowData = [...histTail.map(() => null), ...d.forecast.map(f => f.low)];
+  const highData = [...histTail.map(() => null), ...d.forecast.map(f => f.high)];
+
+  document.getElementById("forecastSummary").innerHTML =
+    `최근 12개월 평균(deseasoned): <b>${d.level}</b>건/월 · ` +
+    `백테스트 MAE: <b>${d.backtest_mae ?? "-"}</b>건 · ` +
+    `다음 6개월 중 성수기(<b>×1.10+</b>): ${d.forecast.filter(f => f.is_peak).map(f => f.ym).join(", ") || "없음"}`;
+
+  destroy("forecastChart");
+  charts.forecastChart = new Chart(document.getElementById("forecastChart"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        { label: "실제", data: histData, borderColor: TEAL, backgroundColor: TEAL+"22",
+          fill: false, tension: 0.3, pointRadius: 2, borderWidth: 2 },
+        { label: "예측", data: fcData, borderColor: ACCENT, backgroundColor: ACCENT+"33",
+          fill: false, tension: 0.3, pointRadius: 4, borderWidth: 2.5, borderDash: [4,4] },
+        { label: "low (10%)", data: lowData, borderColor: ACCENT+"55",
+          backgroundColor: ACCENT+"22", fill: "+1", pointRadius: 0, borderWidth: 0 },
+        { label: "high (90%)", data: highData, borderColor: ACCENT+"55",
+          backgroundColor: ACCENT+"22", fill: false, pointRadius: 0, borderWidth: 0 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, position: "top",
+        labels: { filter: it => !["low (10%)","high (90%)"].includes(it.text) } } },
+      scales: { x: { ticks: { color: "#456" } }, y: { beginAtZero: true } },
+    },
+  });
+}
+
+// ------------------------------------------------------------ hotspots
+async function loadHotspots() {
+  const d = await api("/api/forecast/hotspots?top_k=12");
+  const monthLabel = `${d.next_month}월`;
+  const tbody = document.querySelector("#hotspotTable tbody");
+  tbody.innerHTML = d.rows.map((r, i) => `<tr ${r.alert ? 'style="background:#ffe5e5;"' : ""}>
+    <td>${i+1}</td>
+    <td>${r.biz}</td>
+    <td>${r.mid}</td>
+    <td class="num">${r.current_ratio.toFixed(2)}×</td>
+    <td class="num"><b>${r.next_ratio.toFixed(2)}×</b></td>
+    <td class="num">${r.next_count.toLocaleString()}건</td>
+    <td class="num">${r.total.toLocaleString()}</td>
+    <td>${r.alert ? `<span style="color:#c62828; font-weight:700;">⚠ ${monthLabel} 성수기</span>` : `<span style="color:#789;">평년 수준</span>`}</td>
+  </tr>`).join("") || `<tr><td colspan="8">데이터 없음</td></tr>`;
+}
+
+// ------------------------------------------------------------ biz seasonal heatmap
+async function loadBizHeat() {
+  const arr = await api("/api/forecast/biz-heat");
+  if (!arr.length) return;
+  const months = Array.from({length:12}, (_,i)=>i+1);
+  // build header
+  const headHTML = `<div class="h-cell h-label">사업구분</div>` +
+    months.map(m => `<div class="h-cell" style="background:#103e3a; color:#fff;">${m}월</div>`).join("");
+  // gradient: 0% white -> 20% deep teal
+  const cellColor = (pct) => {
+    const p = Math.min(1, pct / 20);
+    const r = Math.round(255 - (255-16)*p);
+    const g = Math.round(255 - (255-62)*p);
+    const b = Math.round(255 - (255-58)*p);
+    return `rgb(${r},${g},${b})`;
+  };
+  const rowsHTML = arr.map(row => {
+    const cells = months.map(m => {
+      const v = row.months[m] || 0;
+      const c = cellColor(v);
+      const txtColor = v > 12 ? "#fff" : "#234";
+      return `<div class="h-cell" style="background:${c}; color:${txtColor};" title="${row.biz} ${m}월: ${v}%">${v.toFixed(0)}</div>`;
+    }).join("");
+    return `<div class="h-cell h-label" style="font-weight:600;">${row.biz}</div>${cells}`;
+  }).join("");
+  document.getElementById("heatBox").innerHTML =
+    `<div class="heatmap">${headHTML}${rowsHTML}</div>`;
+}
+
+// ------------------------------------------------------------ yoy
+async function loadYoY() {
+  const arr = await api("/api/forecast/biz-yoy");
+  if (!arr.length) return;
+  const labels = arr.map(r => r.biz);
+  const data = arr.map(r => r.growth == null ? 0 : Math.round(r.growth * 1000) / 10); // %
+  const colors = data.map(v => v >= 0 ? GREEN : ACCENT);
+  destroy("yoyChart");
+  charts.yoyChart = new Chart(document.getElementById("yoyChart"), {
+    type: "bar",
+    data: { labels, datasets: [{ label: "YoY 성장률(%)", data, backgroundColor: colors, borderRadius: 4 }] },
+    options: {
+      indexAxis: "y",
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: {
+          label: c => {
+            const r = arr[c.dataIndex];
+            return `${r.prev_year}: ${r.prev.toLocaleString()} → ${r.curr_year}: ${r.curr.toLocaleString()} (${data[c.dataIndex]}%)`;
+          },
+        } },
+      },
+      scales: {
+        x: { ticks: { callback: v => v + "%" } },
+      },
+    },
+  });
 }
 
 function bind() {
